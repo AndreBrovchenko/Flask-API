@@ -1,0 +1,33 @@
+version: '3'
+
+# networks:
+#   dev_network:
+
+services:
+
+  db:
+    build: db
+    ports:
+      - "5432:5432"
+#     container_name: api_db_flask_advert
+#     networks:
+#       dev_network:
+#         aliases:
+#           - db-main
+
+#   app:
+#     build:
+#       context: .
+#       args:
+#         PG_DSN: 'postgresql://admin:1234@db-main:5432/flask_advert'
+#     ports:
+#       - "5000:5000"
+#     container_name: app_flask_advert
+#     depends_on:
+#       - db
+#     networks:
+#       dev_network:
+#         aliases:
+#           - flask_api
+#     restart:
+#       always
