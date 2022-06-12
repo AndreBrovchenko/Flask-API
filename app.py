@@ -39,9 +39,6 @@ Session = sessionmaker(bind=engine)
 password_regex = re.compile(
     r"^(?=.*[a-z_])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&_])[A-Za-z\d@$!#%*?&_]{8,200}$"
 )
-# password_regex = re.compile(
-#     r"^(?=.*[a-z_]){8,200}$"
-# )
 
 
 class User(Base):
@@ -66,6 +63,7 @@ class User(Base):
             return new_user
         except IntegrityError:
             session.rollback()
+            raise HTTPError(409, "user already exists")
 
     def check_password(self, password: str):
         return bcrypt.check_password_hash(self.password.encode(), password.encode())
@@ -84,14 +82,10 @@ class Advert(Base):
     title = Column(String(100), nullable=False, unique=True)
     description = Column(String(200), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
-    # owner = Column(String(50), nullable=False)
     owner = Column(Integer, ForeignKey("user.id"))
-    # user = relationship(User, lazy="joined")
-    # user = relationship(User, backref="adverts")
 
     @classmethod
     def create(cls, session: Session, title: str, description: str, owner: int):
-        # with Session() as session:
         author = (
             session.query(User)
             .filter(User.id == owner)
@@ -108,40 +102,7 @@ class Advert(Base):
             return new_advert
         except IntegrityError:
             session.rollback()
-
-    @classmethod
-    def edit(cls, session: Session, title: str, description: str, owner: int):
-        edit_advert = Advert(
-            title=title,
-            description=description,
-            owner=owner,
-        )
-        session.update(edit_advert)
-        # query = (session.query(Advert)
-        #          .filter(Advert.id == advert_id)
-        #          .update({"title": e_data['title'], "description": e_data['description']}, synchronize_session=False)
-        #          )
-        # edit_advert = (session.query(Advert)
-        #                .filter_by(Advert.id == owner)
-        #                .update({"title": title, "description": description}))
-        try:
-            session.commit()
-            return edit_advert
-        except IntegrityError:
-            session.rollback()
-
-    @classmethod
-    def delete(cls, session: Session, advert_id: int):
-        del_advert = (
-            session.query(Advert)
-            .filter(Advert.id == advert_id)
-            .first()
-        )
-        session.delete(del_advert)
-        try:
-            session.commit()
-        except IntegrityError:
-            session.rollback()
+            raise HTTPError(409, "ad already exists")
 
     def to_dict(self):
         return {
@@ -188,7 +149,6 @@ def check_token(session):
         )
         .first()
     )
-    # user_name = request.headers.get("user_name")
     if token is None:
         raise HTTPError(401, "invalid token")
     return token
@@ -197,10 +157,8 @@ def check_token(session):
 def check_advert(session, advert_id):
     advert = (
         session.query(Advert)
-        # .join(User)
         .filter(
             Advert.id == advert_id,
-            # Token.id == request.headers.get("token"),
         )
         .first()
     )
@@ -214,7 +172,6 @@ class CreateUserModel(pydantic.BaseModel):
     password: str
     email: str
 
-    # @classmethod
     @pydantic.validator("password")
     def strong_password(cls, value: str):
         if not re.search(password_regex, value):
@@ -224,26 +181,9 @@ class CreateUserModel(pydantic.BaseModel):
 
 
 class AdvertModel(pydantic.BaseModel):
-    # еще не сделано
     title: str
     description: str
     owner: int
-
-    # # @classmethod
-    # @pydantic.validator("owner")
-    # def authorized_user(cls, value: int):
-    #     #
-    #     if not re.search(password_regex, value):
-    #         raise ValueError("user not authorized")
-    #     return value
-
-    # @pydantic.root_validator
-    # def ad_owner(cls, values):
-    #     user_name = values.get('user_name')
-    #     owner = values.get('owner')
-    #     if not re.search(password_regex, owner):
-    #         raise ValueError("the user is not the owner of the ad")
-    #     return values
 
 
 def validate(unvalidated_data: dict, validation_model):
@@ -268,38 +208,16 @@ class UserView(MethodView):
 
 
 class AdvertView(MethodView):
-    # еще не сделано
     def get(self, advert_id: int):
-        # Проверяем существует ли объявление с таким id
         with Session() as session:
             advert = check_advert(session, advert_id)
-            # advert = (
-            #     session.query(Advert)
-            #     # .join(User)
-            #     .filter(
-            #         Advert.id == advert_id,
-            #         # Token.id == request.headers.get("token"),
-            #     )
-            #     .first()
-            # )
-            # if advert.user.id != user_id:
-            #     raise HTTPError(403, "auth error")
-            # return jsonify(token.user.to_dict())
-            # advert = check_advert(session)
-            # return jsonify(Advert.to_dict())
             return jsonify(advert.to_dict())
 
     def post(self):
-        # создавать может только авторизованный пользователь.
-        # Нужна проверка что пользователь авторизован.
-        # Нужно передать user_name и проверить что такой пользователь зарегистрирован.
-        # нужно провалидировать добаляемые данные и добавить объявление.
-        # user_id = request.headers.get("user_id")
         login_data = request.json
         with Session() as session:
             if 'owner' not in login_data:
                 raise HTTPError(400, "Bad Request. 'owner' error")
-            # 1-й вариант проверки авторизации (начало)
             author = (
                 session.query(User)
                 .filter(User.id == login_data["owner"])
@@ -307,26 +225,14 @@ class AdvertView(MethodView):
             )
             if author is None:
                 raise HTTPError(403, "user not authorized")
-            # 1-й вариант проверки авторизации (окончание)
-            #          ----------------------------
-            # 2-й вариант проверки авторизации (начало)
-            # token = check_token(session)
-            # if token.user.id != login_data["owner"]:
-            #     raise HTTPError(403, "user not authorized")
-            # 2-й вариант проверки авторизации (окончание)
             create_data = validate(request.json, AdvertModel)
-            # print(create_data['owner'])
             return Advert.create(session, **create_data).to_dict()
 
     def put(self, advert_id: int):
-        # редактировать может только владелец объявления. Нужно передать user_name и токен.
-        # Затем проверить что пользователь является владельцем этого объявления.
-        # И если это так, то провалидировать добаляемые данные и изменить объявление.
         login_data = request.json
         with Session() as session:
             if 'owner' not in login_data:
                 raise HTTPError(400, "Bad Request. 'owner' error")
-            # 1-й вариант проверки авторизации (начало)
             author = (
                 session.query(User)
                 .filter(User.id == login_data["owner"])
@@ -334,37 +240,36 @@ class AdvertView(MethodView):
             )
             if author is None:
                 raise HTTPError(403, "auth error")
-            # 1-й вариант проверки авторизации (окончание)
-            # проверяем существование данного объявления
             advert = check_advert(session, advert_id)
-            # проверяем является ли пользователь владельцем объявления
             if advert.owner != login_data["owner"]:
                 raise HTTPError(400, "the user is not the owner of the ad")
-            # login_data["title"] = advert.title
-            # login_data["description"] = advert.description
-            # валидируем данные перед изменением записи в БД
             edit_data = validate(request.json, AdvertModel)
-            # query = (session.query(Advert)
-            #          .filter(Advert.id == advert_id)
-            #          .update({"title": e_data['title'], "description": e_data['description']}, synchronize_session=False)
-            #          )
-            edit_advert = (session.query(Advert)
-                           .filter(Advert.id == advert_id)
-                           .update({"title": login_data["title"], "description": login_data["description"]}))
+            (session.query(Advert)
+             .filter(Advert.id == advert_id)
+             .update({"title": login_data["title"], "description": login_data["description"]}))
             try:
                 session.commit()
-                return jsonify(edit_advert)
+                return jsonify(edit_data)
             except IntegrityError:
                 session.rollback()
-            # return Advert.edit(session, **edit_data).to_dict()
 
-    def delete(self):
-        # удалять может только владелец объявления. Нужно передать user_name и токен.
-        # Затем проверить что пользователь является владельцем этого объявления.
-        # И если это так, что удалить объявление.
+    def delete(self, advert_id: int):
         with Session() as session:
-            deleted_data = validate(request.json, AdvertModel)
-            return Advert.delete(session, **deleted_data).to_dict()
+            token = check_token(session)
+            user_name = request.headers.get("user_name")
+            if token.user.user_name != user_name:
+                raise HTTPError(403, "auth error")
+            advert = check_advert(session, advert_id)
+            if advert.owner != token.user.id:
+                raise HTTPError(400, "the user is not the owner of the ad")
+            (session.query(Advert)
+             .filter(Advert.id == advert_id)
+             .delete())
+            try:
+                session.commit()
+                return jsonify({})
+            except IntegrityError:
+                session.rollback()
 
 
 @app.route("/flask-app/api/login/", methods=["POST"])
@@ -386,31 +291,12 @@ def login():
         return jsonify({"user_name": login_data["user_name"], "token": token.id, "user_id": user.id})
 
 
-# @app.route('/test', methods=['POST'])
-# # @app.route('/flask-app/api/test')
-# def test():
-#     headers = request.headers
-#     json_data = request.json
-#     qs = request.args
-#
-#     return flask.jsonify({
-#         'status': 'it works!',
-#         'headers': dict(headers),
-#         'json_data': dict(json_data),
-#         'qs': dict(qs)
-#     })
-#     # return flask.jsonify({
-#     #     'status': 'it works!'
-#     #     })
-
-
 app.add_url_rule(
     "/flask-app/api/user/<int:user_id>/", view_func=UserView.as_view("get_user"), methods=["GET"]
 )
 app.add_url_rule(
     "/flask-app/api/user/", view_func=UserView.as_view("register_user"), methods=["POST"]
 )
-# # еще не сделано
 app.add_url_rule(
     "/flask-app/api/advert/<int:advert_id>/", view_func=AdvertView.as_view("get_advert"), methods=["GET"]
 )
