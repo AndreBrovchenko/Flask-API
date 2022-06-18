@@ -48,12 +48,12 @@ def create_advert():
         user_id = response.json()['user_id']
         return requests.post(f'{URL}/advert/',
                              headers={'user_name': user_name, 'token': user_token},
-                             json={'title': 'title_advert_4', 'description': 'description_t_a_4', 'owner': user_id},
+                             json={'title': 'title_advert_2', 'description': 'description_t_a_2'},
                              )
 
 
 def receive_advert():
-    return requests.get(f'{URL}/advert/2/')
+    return requests.get(f'{URL}/advert/1/')
 
 
 def edit_advert():
@@ -66,7 +66,7 @@ def edit_advert():
         user_id = response.json()['user_id']
         return requests.put(f'{URL}/advert/1/',
                             headers={'user_name': user_name, 'token': user_token},
-                            json={'title': 'title_advert_1', 'description': 'description_t_a_1', 'owner': user_id},
+                            json={'title': 'title_advert_1=', 'description': 'description_t_a_1='},
                             )
 
 
@@ -95,6 +95,6 @@ def report(response):
 # report(registration_user())
 # report(receive_user())
 # report(create_advert())
-# report(receive_advert())
-report(edit_advert())
+report(receive_advert())
+# report(edit_advert())
 # report(delete_advert())

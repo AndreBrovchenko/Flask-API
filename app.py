@@ -1,7 +1,8 @@
+import atexit
 import os
 import re
 import uuid
-import flask
+# import flask
 import pydantic
 
 from typing import Union
@@ -24,17 +25,18 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
 
-app = flask.Flask('app')
+app = Flask('app')
 app.debug = True
 # app.config.from_pyfile('settings.py')
 bcrypt = Bcrypt(app)
-PG_DSN = 'postgresql://admin_flask_advert:1234@127.0.0.1:5432/flask_advert'
-# PG_DSN = 'postgresql://admin_flask_advert:1234@127.0.0.1:5432/flask_netology'
-# # engine = create_engine(os.getenv("PG_DSN"))
-engine = create_engine(PG_DSN)
+# PG_DSN = 'postgresql://admin_flask_advert:1234@127.0.0.1:5432/flask_advert'
+print(os.getenv("PG_DSN"))
+engine = create_engine(os.getenv("PG_DSN"))
+# engine = create_engine(PG_DSN)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
+atexit.register(lambda: engine.dispose())
 
 password_regex = re.compile(
     r"^(?=.*[a-z_])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&_])[A-Za-z\d@$!#%*?&_]{8,200}$"
@@ -85,10 +87,16 @@ class Advert(Base):
     owner = Column(Integer, ForeignKey("user.id"))
 
     @classmethod
-    def create(cls, session: Session, title: str, description: str, owner: int):
+    def create(cls, session: Session, title: str, description: str):
+        token = check_token(session)
+        # user_name = request.headers.get("user_name")
+        # if token.user.user_name != user_name:
+        #     raise HTTPError(403, "auth error")
+        # advert = check_advert(session, advert_id)
+        # if advert.owner != token.user.id:
         author = (
             session.query(User)
-            .filter(User.id == owner)
+            .filter(User.id == token.user.id)
             .first()
         )
         new_advert = Advert(
@@ -183,7 +191,7 @@ class CreateUserModel(pydantic.BaseModel):
 class AdvertModel(pydantic.BaseModel):
     title: str
     description: str
-    owner: int
+    # owner: int
 
 
 def validate(unvalidated_data: dict, validation_model):
@@ -216,32 +224,43 @@ class AdvertView(MethodView):
     def post(self):
         login_data = request.json
         with Session() as session:
-            if 'owner' not in login_data:
-                raise HTTPError(400, "Bad Request. 'owner' error")
-            author = (
-                session.query(User)
-                .filter(User.id == login_data["owner"])
-                .first()
-            )
-            if author is None:
-                raise HTTPError(403, "user not authorized")
+            # if 'owner' not in login_data:
+            #     raise HTTPError(400, "Bad Request. 'owner' error")
+            # author = (
+            #     session.query(User)
+            #     .filter(User.id == login_data["owner"])
+            #     .first()
+            # )
+            # if author is None:
+            #     raise HTTPError(403, "user not authorized")
+            token = check_token(session)
+            user_name = request.headers.get("user_name")
+            if token.user.user_name != user_name:
+                raise HTTPError(403, "auth error")
             create_data = validate(request.json, AdvertModel)
             return Advert.create(session, **create_data).to_dict()
 
     def put(self, advert_id: int):
         login_data = request.json
         with Session() as session:
-            if 'owner' not in login_data:
-                raise HTTPError(400, "Bad Request. 'owner' error")
-            author = (
-                session.query(User)
-                .filter(User.id == login_data["owner"])
-                .first()
-            )
-            if author is None:
+            # if 'owner' not in login_data:
+            #     raise HTTPError(400, "Bad Request. 'owner' error")
+            # author = (
+            #     session.query(User)
+            #     .filter(User.id == login_data["owner"])
+            #     .first()
+            # )
+            # if author is None:
+            #     raise HTTPError(403, "auth error")
+            # advert = check_advert(session, advert_id)
+            # if advert.owner != login_data["owner"]:
+            #     raise HTTPError(400, "the user is not the owner of the ad")
+            token = check_token(session)
+            user_name = request.headers.get("user_name")
+            if token.user.user_name != user_name:
                 raise HTTPError(403, "auth error")
             advert = check_advert(session, advert_id)
-            if advert.owner != login_data["owner"]:
+            if advert.owner != token.user.id:
                 raise HTTPError(400, "the user is not the owner of the ad")
             edit_data = validate(request.json, AdvertModel)
             (session.query(Advert)
