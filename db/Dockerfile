@@ -1,5 +1,4 @@
 FROM postgres:13.4
 ENV POSTGRES_USER admin_flask_advert
 ENV POSTGRES_PASSWORD 1234
-# ENV POSTGRES_DB flask_netology
 ENV POSTGRES_DB flask_advert

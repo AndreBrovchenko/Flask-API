@@ -91,10 +91,10 @@ def report(response):
 
 # test()
 # report(test2())
-# report(create_new_user())
+report(create_new_user())
 # report(registration_user())
 # report(receive_user())
 # report(create_advert())
-report(receive_advert())
+# report(receive_advert())
 # report(edit_advert())
 # report(delete_advert())
